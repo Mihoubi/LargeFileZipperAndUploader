@@ -22,7 +22,7 @@ public class LargeFileZipperAndUploader {
 
     public static void main(String[] args) {
         String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_10GB.txt";
-        String bucketName = "check-largezipfile";            // S3 bucket name
+        String bucketName = "check-largezipfile";
         String keyName = "LargeFileKey/largefile_uploaded.zip";
 
         Region region = Region.US_EAST_1;
@@ -80,7 +80,7 @@ public class LargeFileZipperAndUploader {
 
                 if (bytesRead > 0) {
                     accumulatedBuffer.write(partBuffer, 0, bytesRead);
-                     logger.info("Reading from piped input stream: read " + bytesRead + " bytes, accumulated size: " + accumulatedBuffer.size());
+                    logger.debug("Reading from piped input stream: read {} bytes, accumulated size: {}", bytesRead, accumulatedBuffer.size());
 
                     // 20 MB for each part we can change it if want
                     if (accumulatedBuffer.size() >= 20 * 1024 * 1024) {
@@ -109,7 +109,7 @@ public class LargeFileZipperAndUploader {
         } catch (IOException | InterruptedException e) {
             logger.error("Error Uploading {}", e.getMessage());
         } catch (S3Exception e) {
-            logger.info("Error S3 Exception  {}", e.getMessage());
+            logger.error("Error S3 Exception  {}", e.getMessage());
         }
     }
 
@@ -120,7 +120,7 @@ public class LargeFileZipperAndUploader {
                 .build();
 
         CreateMultipartUploadResponse createMultipartUploadResponse = s3Client.createMultipartUpload(createMultipartUploadRequest);
-        System.out.println("Multipart upload initiated with Upload ID: " + createMultipartUploadResponse.uploadId());
+        logger.info("Multipart upload initiated with Upload ID: {}", createMultipartUploadResponse.uploadId());
         return createMultipartUploadResponse.uploadId();
     }
 
@@ -133,7 +133,7 @@ public class LargeFileZipperAndUploader {
                 .build();
 
         s3Client.completeMultipartUpload(completeMultipartUploadRequest);
-        System.out.println("Multipart upload completed successfully for key: " + keyName);
+        logger.info("Multipart upload completed successfully for key: {}", keyName);
     }
 
     private static void uploadPart(S3Client s3Client, String bucketName, String keyName, String uploadId, int partNumber, byte[] dataToUpload, List<CompletedPart> completedParts) {
@@ -152,7 +152,7 @@ public class LargeFileZipperAndUploader {
                     .eTag(uploadPartResponse.eTag())
                     .build());
 
-            System.out.println("Uploaded part " + partNumber + ", size: " + dataToUpload.length + " bytes");
+            logger.info("Uploaded part {}, size: {} bytes", partNumber, dataToUpload.length);
         } catch (S3Exception e) {
             logger.error("Failed to upload part number: {}", partNumber);
         }
