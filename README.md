@@ -4,7 +4,7 @@
 
 This programme continuously zipping a large file and uploading it 
 to S3 in a memory-efficient manner using streams and multithreading.
-It  compresses the file on-the-fly and utilizes 
+It  compresses the file and utilizes 
 Amazon S3's multipart upload to handle the large size.
 ### Configuration 
 
