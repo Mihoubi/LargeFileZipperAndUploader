@@ -33,7 +33,7 @@ public class LargeFileZipperAndUploader {
             zipAndUploadFileMultipart(s3Client, largeFilePath, bucketName, keyName);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Erro during the Upload of the file {}", e.getMessage());
         }
     }
 
@@ -61,7 +61,7 @@ public class LargeFileZipperAndUploader {
                     zipOutputStream.finish();
                     logger.debug("Zipping complete, closing zip output stream.");
                 } catch (IOException e) {
-                    logger.error("Error  {}",e.getMessage());
+                    logger.error("Error during the zipping of the file  {}",e.getMessage());
                 } finally {
                     isZippingComplete.set(true);
                 }
@@ -109,7 +109,7 @@ public class LargeFileZipperAndUploader {
         } catch (IOException | InterruptedException e) {
             logger.error("Error Uploading {}", e.getMessage());
         } catch (S3Exception e) {
-            e.printStackTrace();
+            logger.info("Error S3 Exception  {}", e.getMessage());
         }
     }
 
@@ -154,8 +154,7 @@ public class LargeFileZipperAndUploader {
 
             System.out.println("Uploaded part " + partNumber + ", size: " + dataToUpload.length + " bytes");
         } catch (S3Exception e) {
-            e.printStackTrace();
-            System.err.println("Failed to upload part number: " + partNumber);
+            logger.error("Failed to upload part number: {}", partNumber);
         }
     }
 }
