@@ -21,9 +21,11 @@ public class LargeFileZipperAndUploader {
     private static final Logger logger = LoggerFactory.getLogger(LargeFileZipperAndUploader.class);
 
     public static void main(String[] args) {
-        String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_10GB.txt";
+        String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_5GB.txt";
         String bucketName = "check-largezipfile";
         String keyName = "LargeFileKey/largefile_uploaded.zip";
+        long maxMemory = Runtime.getRuntime().maxMemory();
+        logger.info("Max memory: {} MB", maxMemory / (1024 * 1024));
 
         Region region = Region.US_EAST_1;
         try (S3Client s3Client = S3Client.builder()
@@ -40,14 +42,15 @@ public class LargeFileZipperAndUploader {
     public static void zipAndUploadFileMultipart(S3Client s3Client, String largeFilePath, String bucketName, String keyName) {
         String uploadId = initiateMultipartUpload(s3Client, bucketName, keyName);
 
-        try (PipedOutputStream pipedOutputStream = new PipedOutputStream();
-             PipedInputStream pipedInputStream = new PipedInputStream(pipedOutputStream, 1024 * 1024 * 10)) { // Increased buffer size to 10 MB
+        try (
+                PipedOutputStream pipedOutputStream = new PipedOutputStream();
+             PipedInputStream pipedInputStream = new PipedInputStream(pipedOutputStream, 1024 * 1024 * 4)) {
             AtomicBoolean isZippingComplete = new AtomicBoolean(false);
             Thread zippingThread = new Thread(() -> {
-                try (ZipOutputStream zipOutputStream = new ZipOutputStream(new BufferedOutputStream(pipedOutputStream, 1024 * 1024))) {
+                try (ZipOutputStream zipOutputStream = new ZipOutputStream(new BufferedOutputStream(pipedOutputStream, 1024 * 1024 * 4))) {
                     zipOutputStream.putNextEntry(new ZipEntry(new File(largeFilePath).getName()));
 
-                    byte[] buffer = new byte[1024 * 1024 * 2]; // 2 MB buffer size
+                    byte[] buffer = new byte[1024 * 1024 * 4]; // 2 MB buffer size
                     try (InputStream fileInputStream = Files.newInputStream(Paths.get(largeFilePath))) {
                         int bytesRead;
                         while ((bytesRead = fileInputStream.read(buffer)) != -1) {
@@ -72,7 +75,7 @@ public class LargeFileZipperAndUploader {
             List<CompletedPart> completedParts = new ArrayList<>();
             int partNumber = 1;
             ByteArrayOutputStream accumulatedBuffer = new ByteArrayOutputStream();
-            byte[] partBuffer = new byte[1024 * 1024 * 2]; // 2 MB  buffer size for reading from PipedInputStream be careful with this buffer
+            byte[] partBuffer = new byte[1024 * 1024 * 4]; // 2 MB  buffer size for reading from PipedInputStream be careful with this buffer
             int bytesRead;
 
             while (true) {

@@ -2,7 +2,7 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-
+.idea*
 largefile_5GB.txt
 largefile_10GB.txt
 ### IntelliJ IDEA ###
