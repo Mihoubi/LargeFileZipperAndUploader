@@ -85,7 +85,7 @@ public class LargeFileZipperAndUploader {
                     accumulatedBuffer.write(partBuffer, 0, bytesRead);
                     logger.debug("Reading from piped input stream: read {} bytes, accumulated size: {}", bytesRead, accumulatedBuffer.size());
 
-                    // 20 MB for each part we can change it if want
+                    // 20 MB for each part we can change it if we want
                     if (accumulatedBuffer.size() >= 20 * 1024 * 1024) {
                         byte[] dataToUpload = accumulatedBuffer.toByteArray();
                         uploadPart(s3Client, bucketName, keyName, uploadId, partNumber, dataToUpload, completedParts);
@@ -105,7 +105,6 @@ public class LargeFileZipperAndUploader {
 
             zippingThread.join();
 
-            // Complete the multipart upload
             completeMultipartUpload(s3Client, bucketName, keyName, completedParts, uploadId);
             logger.info("File uploaded successfully.");
 
