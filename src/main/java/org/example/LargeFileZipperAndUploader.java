@@ -21,7 +21,7 @@ public class LargeFileZipperAndUploader {
     private static final Logger logger = LoggerFactory.getLogger(LargeFileZipperAndUploader.class);
 
     public static void main(String[] args) {
-        String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_5GB.txt";
+        String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_10GB.txt";
         String bucketName = "check-largezipfile";            // S3 bucket name
         String keyName = "LargeFileKey/largefile_uploaded.zip";
 
@@ -72,7 +72,7 @@ public class LargeFileZipperAndUploader {
             List<CompletedPart> completedParts = new ArrayList<>();
             int partNumber = 1;
             ByteArrayOutputStream accumulatedBuffer = new ByteArrayOutputStream();
-            byte[] partBuffer = new byte[1024 * 1024 * 2]; // 2 MB  buffer size for reading from PipedInputStream
+            byte[] partBuffer = new byte[1024 * 1024 * 2]; // 2 MB  buffer size for reading from PipedInputStream be careful with this buffer
             int bytesRead;
 
             while (true) {
@@ -80,9 +80,9 @@ public class LargeFileZipperAndUploader {
 
                 if (bytesRead > 0) {
                     accumulatedBuffer.write(partBuffer, 0, bytesRead);
-                    //System.out.println("Reading from piped input stream: read " + bytesRead + " bytes, accumulated size: " + accumulatedBuffer.size());
+                     logger.info("Reading from piped input stream: read " + bytesRead + " bytes, accumulated size: " + accumulatedBuffer.size());
 
-                    // 20 MB for each part we can change it
+                    // 20 MB for each part we can change it if want
                     if (accumulatedBuffer.size() >= 20 * 1024 * 1024) {
                         byte[] dataToUpload = accumulatedBuffer.toByteArray();
                         uploadPart(s3Client, bucketName, keyName, uploadId, partNumber, dataToUpload, completedParts);
