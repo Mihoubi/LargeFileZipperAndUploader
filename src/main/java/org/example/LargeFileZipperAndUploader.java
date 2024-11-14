@@ -21,7 +21,7 @@ public class LargeFileZipperAndUploader {
     private static final Logger logger = LoggerFactory.getLogger(LargeFileZipperAndUploader.class);
 
     public static void main(String[] args) {
-        String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_10GB.txt";  // File to compress and upload (e.g., a large 12GB file)
+        String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_10GB.txt";
         String bucketName = "check-largezipfile";            // S3 bucket name
         String keyName = "LargeFileKey/largefile_uploaded.zip";
 
