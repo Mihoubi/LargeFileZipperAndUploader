@@ -7,23 +7,25 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
+
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-public class LargeFileZipperAndUploader {
+public class LargeDatabaseZipperAndUploader {
 
-    private static final Logger logger = LoggerFactory.getLogger(LargeFileZipperAndUploader.class);
+    private static final Logger logger = LoggerFactory.getLogger(LargeDatabaseZipperAndUploader.class);
 
     public static void main(String[] args) {
-        String largeFilePath = "C:/Users/320266356/BRITE/Projects/LargeFileZipperAndUploader/largefile_5GB.txt";
         String bucketName = "check-largezipfile";
-        String keyName = "LargeFileKey/largefile_uploaded.zip";
+        String keyName = "LargeDatabaseData/uploaded_data.zip";
         long maxMemory = Runtime.getRuntime().maxMemory();
         logger.info("Max memory: {} MB", maxMemory / (1024 * 1024));
 
@@ -32,39 +34,62 @@ public class LargeFileZipperAndUploader {
                 .region(region)
                 .credentialsProvider(ProfileCredentialsProvider.create())
                 .build()) {
-            zipAndUploadFileMultipart(s3Client, largeFilePath, bucketName, keyName);
-
+            zipAndUploadDatabaseDataMultipart(s3Client, bucketName, keyName);
         } catch (Exception e) {
-            logger.error("Erro during the Upload of the file {}", e.getMessage());
+            logger.error("Error during the Upload of the data {}", e.getMessage());
         }
     }
 
-    public static void zipAndUploadFileMultipart(S3Client s3Client, String largeFilePath, String bucketName, String keyName) {
+    public static void zipAndUploadDatabaseDataMultipart(S3Client s3Client, String bucketName, String keyName) {
         String uploadId = initiateMultipartUpload(s3Client, bucketName, keyName);
 
         try (
                 PipedOutputStream pipedOutputStream = new PipedOutputStream();
-             PipedInputStream pipedInputStream = new PipedInputStream(pipedOutputStream, 1024 * 1024 * 4)) {
+                PipedInputStream pipedInputStream = new PipedInputStream(pipedOutputStream, 1024 * 1024 * 4)) {
             AtomicBoolean isZippingComplete = new AtomicBoolean(false);
             Thread zippingThread = new Thread(() -> {
                 try (ZipOutputStream zipOutputStream = new ZipOutputStream(new BufferedOutputStream(pipedOutputStream, 1024 * 1024 * 4))) {
-                    zipOutputStream.putNextEntry(new ZipEntry(new File(largeFilePath).getName()));
+                    // Example for one table; repeat for multiple tables if needed
+                    zipOutputStream.putNextEntry(new ZipEntry("table_data.csv"));
 
-                    byte[] buffer = new byte[1024 * 1024 * 4]; // 2 MB buffer size
-                    try (InputStream fileInputStream = Files.newInputStream(Paths.get(largeFilePath))) {
-                        int bytesRead;
-                        while ((bytesRead = fileInputStream.read(buffer)) != -1) {
-                            zipOutputStream.write(buffer, 0, bytesRead);
-                            zipOutputStream.flush();  // Flush
-                            logger.debug("Zipping: wrote {} bytes to the zip output stream and flushed", bytesRead);
+                    String query = "SELECT * FROM your_large_table"; // Adjust your query
+                    try (DatabaseStreamer dbStreamer = new DatabaseStreamer("jdbc:your_db_url", "user", "password");
+                         ResultSet rs = dbStreamer.streamData(query)) {
+
+                        ResultSetMetaData metaData = rs.getMetaData();
+                        int columnCount = metaData.getColumnCount();
+                        StringBuilder header = new StringBuilder();
+                        for (int i = 1; i <= columnCount; i++) {
+                            header.append(metaData.getColumnName(i));
+                            if (i < columnCount) header.append(',');
+                        }
+                        header.append('\n');
+                        zipOutputStream.write(header.toString().getBytes(StandardCharsets.UTF_8));
+
+                        // Stream data row by row
+                        StringBuilder rowBuilder = new StringBuilder();
+                        while (rs.next()) {
+                            rowBuilder.setLength(0);
+                            for (int i = 1; i <= columnCount; i++) {
+                                String data = rs.getString(i);
+                                rowBuilder.append(data != null ? escapeCsv(data) : "NULL");
+                                if (i < columnCount) rowBuilder.append(',');
+                            }
+                            rowBuilder.append('\n');
+                            zipOutputStream.write(rowBuilder.toString().getBytes(StandardCharsets.UTF_8));
+
+                            // Flush periodically to send data to piped stream
+                            if (rowBuilder.length() > 1024 * 10) { // Example condition
+                                zipOutputStream.flush();
+                            }
                         }
                     }
 
                     zipOutputStream.closeEntry();
                     zipOutputStream.finish();
                     logger.debug("Zipping complete, closing zip output stream.");
-                } catch (IOException e) {
-                    logger.error("Error during the zipping of the file  {}",e.getMessage());
+                } catch (IOException | SQLException e) {
+                    logger.error("Error during the zipping of the database data: {}", e.getMessage());
                 } finally {
                     isZippingComplete.set(true);
                 }
@@ -75,7 +100,7 @@ public class LargeFileZipperAndUploader {
             List<CompletedPart> completedParts = new ArrayList<>();
             int partNumber = 1;
             ByteArrayOutputStream accumulatedBuffer = new ByteArrayOutputStream();
-            byte[] partBuffer = new byte[1024 * 1024 * 4]; // 2 MB  buffer size for reading from PipedInputStream be careful with this buffer
+            byte[] partBuffer = new byte[1024 * 1024 * 4]; // 4 MB buffer size
             int bytesRead;
 
             while (true) {
@@ -85,7 +110,7 @@ public class LargeFileZipperAndUploader {
                     accumulatedBuffer.write(partBuffer, 0, bytesRead);
                     logger.debug("Reading from piped input stream: read {} bytes, accumulated size: {}", bytesRead, accumulatedBuffer.size());
 
-                    // 20 MB for each part we can change it if we want
+                    // 20 MB for each part; adjust as needed
                     if (accumulatedBuffer.size() >= 20 * 1024 * 1024) {
                         byte[] dataToUpload = accumulatedBuffer.toByteArray();
                         uploadPart(s3Client, bucketName, keyName, uploadId, partNumber, dataToUpload, completedParts);
@@ -99,19 +124,21 @@ public class LargeFileZipperAndUploader {
                         logger.info("Uploaded last part: part number : {}", partNumber);
                         partNumber++;
                     }
-                    break; // Exit
+                    break; // Exit loop
                 }
             }
 
             zippingThread.join();
 
             completeMultipartUpload(s3Client, bucketName, keyName, completedParts, uploadId);
-            logger.info("File uploaded successfully.");
+            logger.info("Database data uploaded successfully.");
 
         } catch (IOException | InterruptedException e) {
             logger.error("Error Uploading {}", e.getMessage());
+            abortMultipartUpload(s3Client, bucketName, keyName, uploadId);
         } catch (S3Exception e) {
-            logger.error("Error S3 Exception  {}", e.getMessage());
+            logger.error("S3 Exception: {}", e.getMessage());
+            abortMultipartUpload(s3Client, bucketName, keyName, uploadId);
         }
     }
 
@@ -121,21 +148,32 @@ public class LargeFileZipperAndUploader {
                 .key(keyName)
                 .build();
 
-        CreateMultipartUploadResponse createMultipartUploadResponse = s3Client.createMultipartUpload(createMultipartUploadRequest);
-        logger.info("Multipart upload initiated with Upload ID: {}", createMultipartUploadResponse.uploadId());
-        return createMultipartUploadResponse.uploadId();
+        CreateMultipartUploadResponse response = s3Client.createMultipartUpload(createMultipartUploadRequest);
+        logger.info("Multipart upload initiated with Upload ID: {}", response.uploadId());
+        return response.uploadId();
     }
 
     private static void completeMultipartUpload(S3Client s3Client, String bucketName, String keyName, List<CompletedPart> completedParts, String uploadId) {
-        CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
+        CompleteMultipartUploadRequest completeRequest = CompleteMultipartUploadRequest.builder()
                 .bucket(bucketName)
                 .key(keyName)
                 .uploadId(uploadId)
                 .multipartUpload(CompletedMultipartUpload.builder().parts(completedParts).build())
                 .build();
 
-        s3Client.completeMultipartUpload(completeMultipartUploadRequest);
+        s3Client.completeMultipartUpload(completeRequest);
         logger.info("Multipart upload completed successfully for key: {}", keyName);
+    }
+
+    private static void abortMultipartUpload(S3Client s3Client, String bucketName, String keyName, String uploadId) {
+        AbortMultipartUploadRequest abortRequest = AbortMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(keyName)
+                .uploadId(uploadId)
+                .build();
+
+        s3Client.abortMultipartUpload(abortRequest);
+        logger.info("Multipart upload aborted for key: {}", keyName);
     }
 
     private static void uploadPart(S3Client s3Client, String bucketName, String keyName, String uploadId, int partNumber, byte[] dataToUpload, List<CompletedPart> completedParts) {
@@ -156,7 +194,16 @@ public class LargeFileZipperAndUploader {
 
             logger.info("Uploaded part {}, size: {} bytes", partNumber, dataToUpload.length);
         } catch (S3Exception e) {
-            logger.error("Failed to upload part number: {}", partNumber);
+            logger.error("Failed to upload part number: {}. Error: {}", partNumber, e.getMessage());
+            throw e; // Re-throw to trigger abort in the calling method
         }
+    }
+
+    private static String escapeCsv(String field) {
+        if (field.contains(",") || field.contains("\"") || field.contains("\n")) {
+            field = field.replace("\"", "\"\"");
+            return "\"" + field + "\"";
+        }
+        return field;
     }
 }
